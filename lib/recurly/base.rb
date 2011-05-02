@@ -168,6 +168,54 @@ end
 module ActiveResource
   class Connection
     private
+    
+    class TempResponse
+      attr_accessor :code, :message, :body, :response
+      @code = nil
+      @message = nil
+      @body = nil
+      @response = nil
+      
+      def initialize(http_client_response)
+        @response = http_client_response
+        @body = http_client_response.body
+        @code = http_client_response.code if response.respond_to?(:code)
+        @message = Hash.from_xml(http_client_response.body)['errors']['error'] rescue nil
+        if !@message.blank? && @message[-1] == '.'
+          @message = @message[0,-1]
+        end
+      end
+    end
+
+    def handle_response(response)
+      case response.code.to_i
+      when 301,302
+        raise(Redirection.new(response))
+      when 200...400
+        response
+      when 401
+        message = Hash.from_xml(response.body)['errors']['error'] rescue nil
+        raise(UnauthorizedAccess.new(response, message))
+      when 403
+        message = Hash.from_xml(response.body)['errors']['error'] rescue nil
+        raise(ForbiddenAccess.new(response, message))
+      when 404
+        message = Hash.from_xml(response.body)['errors']['error'] rescue nil
+        raise ResourceNotFound.new(response, message)
+      when 422
+        response = TempResponse.new(response)
+        raise ResourceInvalid.new(response)
+      when 412
+        message = Hash.from_xml(response.body)['errors']['error'] rescue nil
+        raise ClientError.new(response, message)
+      when 500..600
+        message = Hash.from_xml(response.body)['errors']['error'] rescue nil
+        raise(ServerError.new(response, message))
+      else
+        raise(connectionError.new(response, "Unknown response code: #{response.code}"))
+      end
+    end
+    
     def default_header
       @default_header ||= {}
       @default_header['User-Agent'] = "Recurly Ruby Client v#{Recurly::VERSION}"
