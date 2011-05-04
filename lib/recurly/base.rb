@@ -135,7 +135,7 @@ module Recurly
         result
       end
 
-      def handle_response(response)
+      de(response)
         case response.code.to_i
         when 401
           message = Hash.from_xml(response.body)['errors']['error'] rescue nil
@@ -184,6 +184,10 @@ module ActiveResource
         if !@message.blank? && @message[-1] == '.'
           @message = @message[0,-1]
         end
+      end
+      
+      def [] some_string
+	      @response[some_string]
       end
     end
 
